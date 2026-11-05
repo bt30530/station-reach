@@ -1,0 +1,827 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Station Reach</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root {
+  --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1f22; --muted: #6a6f76; --line: #e3e1da;
+  --accent: #1f6feb; --accent-soft: #e6efff; --walk: #b9bcc2; --warn: #b35c00;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131517; --panel: #1c1f22; --ink: #e8e8e6; --muted: #9aa0a6; --line: #2e3236;
+    --accent: #6ea8ff; --accent-soft: #1d2a40; --walk: #5a5f66; --warn: #f0a050;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131517; --panel: #1c1f22; --ink: #e8e8e6; --muted: #9aa0a6; --line: #2e3236;
+  --accent: #6ea8ff; --accent-soft: #1d2a40; --walk: #5a5f66; --warn: #f0a050;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+h2 { font-size: 19px; margin: 0 0 4px; }
+h3 { font-size: 15px; margin: 0 0 8px; }
+.sub { color: var(--muted); margin: 0 0 16px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-top: 18px; }
+.controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+.field { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 220px; flex: 1; }
+.field label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+input[type=text], input[type=date] {
+  font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 8px; padding: 9px 11px; width: 100%;
+}
+input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.suggest { position: absolute; top: 100%; left: 0; right: 0; z-index: 1000; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 8px; margin-top: 4px; box-shadow: 0 6px 24px rgba(0,0,0,.15);
+  max-height: 300px; overflow: auto; display: none; }
+.suggest button { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--ink);
+  font: inherit; padding: 8px 11px; cursor: pointer; }
+.suggest button:hover, .suggest button.active { background: var(--accent-soft); }
+.suggest button { display: flex; align-items: center; gap: 10px; }
+.suggest .kind { flex: none; width: 28px; height: 28px; border-radius: 6px; display: grid; place-items: center; color: var(--muted); background: var(--bg); }
+.suggest .kind.rail { color: var(--accent); background: var(--accent-soft); }
+.suggest .nm { min-width: 0; }
+.suggest small { color: var(--muted); margin-left: 6px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { font: inherit; border: 0; background: var(--bg); color: var(--ink); padding: 9px 14px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button.on { background: var(--accent); color: #fff; }
+.check { display: flex; gap: 6px; align-items: center; font-size: 14px; color: var(--muted); padding-bottom: 9px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 14px 0; }
+.stat { background: var(--bg); border-radius: 10px; padding: 10px 12px; }
+.stat b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 12.5px; color: var(--muted); }
+.trip-stats { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 560px) { .trip-stats { grid-template-columns: repeat(2, 1fr); } }
+.stat .fast { display: flex; align-items: baseline; gap: 2px 8px; flex-wrap: wrap; }
+.stat .fast .tag { white-space: nowrap; }
+.stat .fast .tag { display: inline-flex; align-items: center; gap: 3px; color: var(--accent); font-weight: 600; }
+.stat strong { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+#map { height: 420px; border-radius: 10px; margin-top: 12px; background: var(--bg); }
+.grid2 { display: grid; grid-template-columns: 1fr; gap: 18px; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
+th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--line); padding: 6px 8px; }
+td { padding: 7px 8px; border-bottom: 1px solid var(--line); }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--accent-soft); }
+td.num, th.num { text-align: right; }
+.bar { display: inline-block; height: 8px; background: var(--accent); border-radius: 4px; vertical-align: middle; margin-right: 6px; opacity: .8; }
+.linkbtn { font: inherit; color: var(--accent); background: none; border: 0; padding: 6px 0; cursor: pointer; }
+.status { color: var(--muted); font-size: 14px; min-height: 20px; }
+.status.err { color: var(--warn); }
+.timeline { width: 100%; overflow-x: auto; }
+.timeline svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.timeline text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.timeline .row:hover rect.bg { fill: var(--accent-soft); }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; color: var(--muted); margin: 6px 0 4px; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.tip { position: fixed; z-index: 2000; pointer-events: none; background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 10px; padding: 12px 14px; font-size: 13px; box-shadow: 0 6px 24px rgba(0,0,0,.18); width: max-content; max-width: min(460px, calc(100vw - 16px)); display: none; }
+/* One leg: times | coloured rail with a square at each end | stations | operator and direction */
+.tip .legs { display: grid; grid-template-columns: 40px 10px auto minmax(0, 1fr); column-gap: 10px; }
+.tip .leg { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; grid-template-rows: auto auto; row-gap: 10px; align-items: center; }
+.tip .leg .t { font-weight: 600; font-variant-numeric: tabular-nums; }
+.tip .leg .rail { grid-column: 2; grid-row: 1 / 3; align-self: stretch; position: relative; }
+.tip .leg .rail::before { content: ""; position: absolute; left: 4px; width: 2px; top: 10px; bottom: 10px; background: var(--c); }
+.tip .leg .rail i { position: absolute; left: 0; width: 10px; height: 10px; border-radius: 2px; background: var(--c); }
+.tip .leg .rail i:first-child { top: 5px; }
+.tip .leg .rail i:last-child { bottom: 5px; }
+.tip .leg .st { grid-column: 3; white-space: nowrap; font-weight: 500; }
+.tip .leg .op { grid-column: 4; grid-row: 1 / 3; align-self: stretch; display: flex; flex-direction: column; justify-content: center; color: var(--muted); font-size: 12px; line-height: 1.35; padding-left: 12px; border-left: 1px solid var(--line); }
+.tip .leg .op b { display: block; color: var(--ink); font-weight: 500; }
+/* Between legs: an interchange or a walk, sitting under the rail */
+.tip .gap { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; margin: 6px 0 6px 50px; color: var(--muted); font-size: 12px; }
+.tip .gap svg { flex: none; }
+.tip .gap.tight { color: var(--warn); }
+.note { font-size: 13px; color: var(--muted); }
+.hours svg { width: 100%; height: 90px; display: block; }
+.hours text { fill: var(--muted); font-size: 10px; }
+.settings { display: grid; gap: 18px; }
+.setting { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.setting .seg { max-width: 100%; overflow-x: auto; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--bg); color: var(--muted); cursor: pointer; font-size: 14px; user-select: none; }
+.chip input { margin: 0; accent-color: var(--accent); }
+.chip:has(input:checked) { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+.chip:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.seg button small { opacity: .75; margin-left: 4px; }
+footer { color: var(--muted); font-size: 12.5px; margin-top: 28px; }
+footer a { color: inherit; }
+footer .copyright { margin-top: 10px; }
+.leaflet-container { font: inherit; }
+.tiles-light { filter: grayscale(0.85) contrast(0.9) brightness(1.05); }
+.tiles-dark { filter: grayscale(1) invert(1) contrast(0.85) brightness(0.9); }
+td.num { white-space: nowrap; }
+@media (min-width: 900px) { .grid2 { grid-template-columns: 1.15fr 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Station Reach</h1>
+  <p class="sub">Where do trains from a station go, how often, and how well does it connect to the places you care about?</p>
+
+  <div class="panel">
+    <div class="controls">
+      <div class="field">
+        <label for="home">Home station</label>
+        <input id="home" type="text" autocomplete="off" placeholder="Start typing a station name">
+        <div class="suggest" id="home-s"></div>
+      </div>
+      <div>
+        <div class="field" style="min-width:0"><label>Day</label></div>
+        <div class="seg" id="daytype">
+          <button data-d="weekday" class="on">Weekday</button><button data-d="sat">Saturday</button><button data-d="sun">Sunday</button>
+        </div>
+      </div>
+      <div class="field" style="min-width:150px; flex:0">
+        <label for="date">Date</label>
+        <input id="date" type="date">
+      </div>
+    </div>
+  </div>
+
+  <section class="panel" id="direct">
+    <h2 id="direct-title">Direct trains</h2>
+    <div class="status" id="direct-status"></div>
+    <div class="stats" id="direct-stats"></div>
+    <div class="grid2">
+      <div>
+        <div id="map"></div>
+        <div class="hours" id="hours"></div>
+      </div>
+      <div>
+        <table>
+          <thead><tr><th>Station</th><th class="num">Trains</th><th>How often</th><th class="num">Fastest</th></tr></thead>
+          <tbody id="dest-rows"></tbody>
+        </table>
+        <button class="linkbtn" id="more" hidden>Show all</button>
+        <p class="note">Tap a station to plan journeys to it. Line thickness on the map shows how many trains run each stretch.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="trip">
+    <h2>Getting to…</h2>
+    <div class="controls">
+      <div class="field">
+        <label for="dest">Destination: a station, street or place</label>
+        <input id="dest" type="text" autocomplete="off" placeholder="Start typing a station, street or place">
+        <div class="suggest" id="dest-s"></div>
+      </div>
+    </div>
+    <div class="status" id="trip-status"></div>
+    <div id="trip-out"></div>
+  </section>
+
+  <section class="panel" id="settings">
+    <h2>Journey settings</h2>
+    <p class="note" style="margin:0 0 14px">These apply to everything on the page: the direct services from your station and every journey plan.</p>
+    <div class="settings">
+      <div class="setting">
+        <div class="field" style="min-width:0"><label>Modes of transport</label></div>
+        <div class="chips" id="modes"></div>
+      </div>
+      <div class="setting">
+        <div class="field" style="min-width:0"><label>Walking speed</label></div>
+        <div class="seg" id="walk"></div>
+      </div>
+      <div class="setting">
+        <div class="field" style="min-width:0"><label>Minimum time to change</label></div>
+        <div class="seg" id="change"></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Timetables and routing from <a href="https://transitous.org" target="_blank" rel="noopener">Transitous</a> (MOTIS, built on published operator data;
+    <a href="https://transitous.org/sources/" target="_blank" rel="noopener">data sources</a>).
+    These are scheduled times, so engineering works and strikes may not show. Map © OpenStreetMap contributors.
+    <div class="copyright">© 2026 <a href="https://tobermory.io">Tobermory.io</a> · Contact: <a href="mailto:hello@tobermory.io">hello@tobermory.io</a></div>
+  </footer>
+</main>
+<div class="tip" id="tip"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const API = 'https://api.transitous.org/api/v1';
+const TZ = 'Europe/London';
+const NON_RAIL = new Set(['BUS', 'COACH', 'FERRY', 'AIRPLANE', 'WALK', 'BIKE', 'CAR', 'ODM', 'FLEX', 'RENTAL', 'CABLE_CAR', 'AERIAL_LIFT']);
+const RAIL_STOP_MODES = ['RAIL', 'HIGHSPEED_RAIL', 'LONG_DISTANCE', 'NIGHT_RAIL', 'REGIONAL_RAIL', 'REGIONAL_FAST_RAIL', 'SUBURBAN', 'SUBWAY', 'METRO', 'TRAM'];
+const PALETTE = ['#2f7ed8', '#e8743b', '#19a979', '#9467bd', '#d64e6c', '#c9a227', '#1f9fb4', '#8c6d4f', '#5c6bc0', '#7cb342'];
+const $ = (id) => document.getElementById(id);
+
+// ---------- state ----------
+const params = new URLSearchParams(location.search);
+const state = {
+  // Nothing is pre-filled: the page waits for a home station (or opens one from a shared link).
+  home: params.get('from') ? { id: params.get('from'), name: params.get('fromName') || params.get('from') } : null,
+  dest: params.get('to') ? { place: params.get('to'), name: params.get('toName') || params.get('to') } : null,
+  dayType: params.get('day') || 'weekday',
+  date: params.get('date') || null,
+  modes: null, walk: null, change: null, // filled from the settings below
+};
+
+// ---------- journey settings ----------
+// Each choice maps to the routing service's own mode names.
+const MODE_GROUPS = [
+  { key: 'rail', label: 'National Rail', api: ['REGIONAL_RAIL', 'LONG_DISTANCE', 'HIGHSPEED_RAIL', 'NIGHT_RAIL'], seen: ['REGIONAL_FAST_RAIL', 'RAIL'], on: true },
+  { key: 'suburban', label: 'Suburban rail (Elizabeth line)', api: ['SUBURBAN'], on: true },
+  { key: 'tube', label: 'Underground', api: ['SUBWAY'], seen: ['METRO'], on: true },
+  { key: 'tram', label: 'Trams', api: ['TRAM', 'FUNICULAR'], on: true },
+  { key: 'bus', label: 'Buses', api: ['BUS'], on: false },
+  { key: 'coach', label: 'Coaches', api: ['COACH'], on: false },
+  { key: 'ferry', label: 'Ferries', api: ['FERRY'], on: false },
+];
+const WALK_SPEEDS = [ // metres per second sent to the router
+  { key: 'slow', label: 'Slow', sub: '2.5 mph', ms: 1.12 },
+  { key: 'avg', label: 'Average', sub: '3 mph', ms: 1.34 },
+  { key: 'brisk', label: 'Brisk', sub: '3.5 mph', ms: 1.56 },
+];
+const CHANGE_MINS = [
+  { key: 0, label: 'Station minimum' },
+  { key: 5, label: '5 min' }, { key: 8, label: '8 min' }, { key: 10, label: '10 min' }, { key: 15, label: '15 min' },
+];
+{
+  const m = params.get('modes');
+  state.modes = new Set(m != null ? m.split(',').filter((k) => MODE_GROUPS.some((g) => g.key === k))
+    : MODE_GROUPS.filter((g) => g.on || (g.key === 'bus' && params.get('rail') === '0')).map((g) => g.key));
+  state.walk = WALK_SPEEDS.some((w) => w.key === params.get('walk')) ? params.get('walk') : 'avg';
+  // Default 5 minutes: National Rail's standard minimum, since the router's own station minimum is about 2 everywhere.
+  const c = params.has('change') ? +params.get('change') : 5;
+  state.change = CHANGE_MINS.some((x) => x.key === c) ? c : 5;
+}
+const selectedGroups = () => MODE_GROUPS.filter((g) => state.modes.has(g.key));
+const apiModes = () => selectedGroups().flatMap((g) => g.api);
+const modeAllowed = (mode) => selectedGroups().some((g) => g.api.includes(mode) || (g.seen || []).includes(mode));
+const onlyTrains = () => !['bus', 'coach', 'ferry'].some((k) => state.modes.has(k));
+
+function syncUrl() {
+  const p = new URLSearchParams({ day: state.dayType, date: state.date });
+  if (state.home) { p.set('from', state.home.id); p.set('fromName', state.home.name); }
+  if (state.dest) { p.set('to', state.dest.place); p.set('toName', state.dest.name); }
+  p.set('modes', [...state.modes].join(','));
+  if (state.walk !== 'avg') p.set('walk', state.walk);
+  if (state.change !== 5) p.set('change', state.change);
+  history.replaceState(null, '', '?' + p);
+}
+
+function renderSettings() {
+  $('modes').innerHTML = MODE_GROUPS.map((g) => `<label class="chip"><input type="checkbox" value="${g.key}" ${state.modes.has(g.key) ? 'checked' : ''}>${g.label}</label>`).join('');
+  $('walk').innerHTML = WALK_SPEEDS.map((w) => `<button type="button" data-k="${w.key}" class="${state.walk === w.key ? 'on' : ''}">${w.label}<small>${w.sub}</small></button>`).join('');
+  $('change').innerHTML = CHANGE_MINS.map((c) => `<button type="button" data-k="${c.key}" class="${state.change === c.key ? 'on' : ''}">${c.label}</button>`).join('');
+}
+
+// ---------- API ----------
+const cache = new Map();
+async function api(path, q) {
+  const url = API + path + '?' + new URLSearchParams(q);
+  if (cache.has(url)) return cache.get(url);
+  const pr = fetch(url).then(async (r) => {
+    if (!r.ok) throw new Error(`${r.status} from timetable service`);
+    return r.json();
+  });
+  cache.set(url, pr);
+  pr.catch(() => cache.delete(url));
+  return pr;
+}
+async function pool(items, n, fn) {
+  const out = new Array(items.length); let i = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
+    while (i < items.length) { const k = i++; try { out[k] = await fn(items[k], k); } catch (e) { out[k] = null; } }
+  }));
+  return out;
+}
+
+// ---------- time ----------
+const hm = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+const fmt = (iso) => hm.format(new Date(iso));
+function tzOffsetMin(ms) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hourCycle: 'h23', year: 'numeric', month: '2-digit',
+    day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
+  return (Date.UTC(+p.year, p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - ms) / 60000;
+}
+function localMidnight(ymd) { // UTC ms of 00:00 London time on that date
+  const [y, m, d] = ymd.split('-').map(Number);
+  const guess = Date.UTC(y, m - 1, d);
+  return guess - tzOffsetMin(guess) * 60000;
+}
+const ymdOf = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+function nextDate(type) {
+  const d = new Date(); d.setDate(d.getDate() + 1);
+  const want = type === 'sat' ? [6] : type === 'sun' ? [0] : [2, 3, 4]; // Tue-Thu are the most "typical" weekdays
+  while (!want.includes(d.getDay())) d.setDate(d.getDate() + 1);
+  return ymdOf(d);
+}
+function dayWindow() {
+  const mid = localMidnight(state.date);
+  return { mid, start: mid + 3 * 3600e3, end: mid + 27 * 3600e3 }; // a railway day: 03:00 to 03:00
+}
+const minOfDay = (iso) => (Date.parse(iso) - dayWindow().mid) / 60000;
+const dur = (min) => { min = Math.round(min); return min < 60 ? `${min} min` : `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, '0')}`; };
+const clock = (m) => { m = Math.round(m); const h = Math.floor(m / 60) % 24; return `${String(h).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
+
+function freqLabel(depMins, total) {
+  const day = depMins.filter((m) => m >= 7 * 60 && m < 19 * 60).length;
+  const perHour = day / 12;
+  if (perHour >= 1.5) return `${Math.round(perHour)} an hour`;
+  if (perHour >= 0.8) return 'hourly';
+  if (perHour >= 0.4) return 'every 2 hours';
+  return total === 1 ? 'once a day' : `${total} a day`;
+}
+
+// ---------- colours per operator ----------
+const opColour = new Map();
+function colourFor(op) {
+  if (!opColour.has(op)) opColour.set(op, PALETTE[opColour.size % PALETTE.length]);
+  return opColour.get(op);
+}
+
+// ---------- search boxes ----------
+function areaLabel(r) {
+  const a = (r.areas || []).filter((x) => x.default || x.adminLevel === 6).map((x) => x.name);
+  return [...new Set(a)].filter((x) => x !== r.name).join(', ');
+}
+// What kind of result this is, so the list shows a station apart from a bus stop, an area or a street address.
+const ICONS = {
+  train: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="1.5" width="9" height="10" rx="2.5"/><path d="M3.5 7h9M6 14.5l-1.5-3M10 14.5l1.5-3"/><circle cx="6" cy="9.3" r=".4" fill="currentColor"/><circle cx="10" cy="9.3" r=".4" fill="currentColor"/></svg>',
+  bus: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="1.5" width="11" height="11" rx="1.5"/><path d="M2.5 6.5h11M5 12.5v2M11 12.5v2"/><circle cx="5.3" cy="9.6" r=".4" fill="currentColor"/><circle cx="10.7" cy="9.6" r=".4" fill="currentColor"/></svg>',
+  area: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M1.5 3.5 5.5 2l5 2 4-1.5v10l-4 1.5-5-2-4 1.5z"/><path d="M5.5 2v10M10.5 4v10"/></svg>',
+  home: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 7.5 8 2.5l6 5"/><path d="M3.5 6.5v7h9v-7"/><path d="M6.5 13.5v-4h3v4"/></svg>',
+  pin: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 14.5s4.5-4.2 4.5-7.8a4.5 4.5 0 0 0-9 0c0 3.6 4.5 7.8 4.5 7.8z"/><circle cx="8" cy="6.7" r="1.6"/></svg>',
+};
+const AREA_CATS = new Set(['city', 'town', 'village', 'hamlet', 'suburb', 'quarter', 'neighbourhood', 'locality', 'borough', 'county', 'district', 'island', 'isolated_dwelling']);
+function kindOf(r) {
+  if (r.type === 'STOP') {
+    return (r.modes || []).some((m) => RAIL_STOP_MODES.includes(m))
+      ? { icon: ICONS.train, label: 'Station', cls: 'rail' }
+      : { icon: ICONS.bus, label: 'Bus stop', cls: '' };
+  }
+  if (r.type === 'ADDRESS') return { icon: ICONS.home, label: 'Address', cls: '' };
+  const cat = (r.category || '').replace(/_\d+$/, '');
+  if (AREA_CATS.has(cat)) return { icon: ICONS.area, label: 'Area', cls: '' };
+  const nice = cat ? cat.replace(/_/g, ' ') : 'place';
+  return { icon: ICONS.pin, label: nice[0].toUpperCase() + nice.slice(1), cls: '' };
+}
+
+function attachSearch(input, box, { stopsOnly, onPick }) {
+  let timer, results = [], active = -1, seq = 0;
+  const render = () => {
+    box.innerHTML = results.map((r, i) => {
+      const k = kindOf(r), area = areaLabel(r);
+      return `<button type="button" data-i="${i}" class="${i === active ? 'active' : ''}"><span class="kind ${k.cls}" title="${k.label}">${k.icon}</span><span class="nm">${esc(r.name)}<small>${k.label}${area ? ' · ' + esc(area) : ''}</small></span></button>`;
+    }).join('');
+    box.style.display = results.length ? 'block' : 'none';
+  };
+  const pick = (r) => { results = []; render(); input.value = r.name; onPick(r); };
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    const text = input.value.trim();
+    if (text.length < 2) { results = []; render(); return; }
+    timer = setTimeout(async () => {
+      const my = ++seq;
+      const q = { text, language: 'en' };
+      if (stopsOnly) q.type = 'STOP';
+      try {
+        let r = await api('/geocode', q);
+        if (my !== seq) return;
+        r = r.filter((x) => x.country === 'GB');
+        if (stopsOnly) r = r.filter((x) => (x.modes || []).some((m) => RAIL_STOP_MODES.includes(m)));
+        results = r.slice(0, 8); active = -1; render();
+      } catch { /* ignore typing-time errors */ }
+    }, 220);
+  });
+  input.addEventListener('keydown', (e) => {
+    if (!results.length) return;
+    if (e.key === 'ArrowDown') { active = (active + 1) % results.length; render(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { active = (active - 1 + results.length) % results.length; render(); e.preventDefault(); }
+    else if (e.key === 'Enter') { pick(results[Math.max(active, 0)]); e.preventDefault(); }
+    else if (e.key === 'Escape') { results = []; render(); }
+  });
+  box.addEventListener('mousedown', (e) => { const b = e.target.closest('button'); if (b) { e.preventDefault(); pick(results[+b.dataset.i]); } });
+  input.addEventListener('blur', () => setTimeout(() => { results = []; render(); }, 150));
+}
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// ---------- map ----------
+let map, mapLayer, tiles;
+function initMap() {
+  map = L.map('map', { zoomControl: true, scrollWheelZoom: false });
+  setTiles();
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', setTiles);
+  mapLayer = L.layerGroup().addTo(map);
+  map.setView([54.4, -2.9], 5); // the whole of Great Britain until a station is chosen
+}
+function setTiles() {
+  const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  if (tiles) tiles.remove();
+  tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', maxZoom: 18,
+    className: dark ? 'tiles-dark' : 'tiles-light',
+  }).addTo(map);
+}
+
+// ---------- section 1: direct trains ----------
+let directRun = 0, allDests = [], showAll = false;
+
+async function fetchDepartures(stopId, win) {
+  const out = []; let cursor = null;
+  for (let page = 0; page < 12; page++) {
+    const q = { stopId, n: 200 };
+    if (cursor) q.pageCursor = cursor; else q.time = new Date(win.start).toISOString();
+    const r = await api('/stoptimes', q);
+    const st = r.stopTimes || [];
+    for (const s of st) {
+      const t = s.place.departure || s.place.scheduledDeparture;
+      if (!t || !modeAllowed(s.mode) || s.place.pickupType === 'NOT_ALLOWED' || s.place.cancelled) continue;
+      const ms = Date.parse(t);
+      if (ms >= win.start && ms < win.end) out.push(s);
+    }
+    const last = st.length && Date.parse(st[st.length - 1].place.departure || st[st.length - 1].place.arrival);
+    if (!st.length || last >= win.end || !r.nextPageCursor) break;
+    cursor = r.nextPageCursor;
+  }
+  const seen = new Set();
+  return out.filter((s) => !seen.has(s.tripId) && seen.add(s.tripId));
+}
+
+function tripStops(trip) {
+  const stops = [];
+  for (const leg of trip.legs || []) {
+    if (leg.mode === 'WALK') continue;
+    stops.push(leg.from, ...(leg.intermediateStops || []), leg.to);
+  }
+  return stops;
+}
+
+async function loadDirect() {
+  const run = ++directRun;
+  const win = dayWindow();
+  const status = $('direct-status');
+  $('direct-stats').innerHTML = ''; $('dest-rows').innerHTML = ''; $('hours').innerHTML = ''; mapLayer.clearLayers();
+  $('more').hidden = true;
+  if (!state.home) {
+    $('direct-title').textContent = `Direct ${onlyTrains() ? 'trains' : 'services'}`;
+    status.className = 'status'; status.textContent = 'Choose a home station above to see where its trains go and how often.';
+    return;
+  }
+  $('direct-title').textContent = `Direct ${onlyTrains() ? 'trains' : 'services'} from ${state.home.name}`;
+  status.className = 'status'; status.textContent = 'Loading departures…';
+  if (!state.modes.size) { status.className = 'status err'; status.textContent = 'Choose at least one mode of transport in Journey settings, at the bottom of the page.'; return; }
+
+  let deps;
+  try { deps = await fetchDepartures(state.home.id, win); }
+  catch (e) { status.className = 'status err'; status.textContent = 'Could not load departures: ' + e.message; return; }
+  if (run !== directRun) return;
+  if (!deps.length) { status.className = 'status err'; status.textContent = 'No trains found for this day. Try another date: the timetable may not be loaded that far ahead.'; return; }
+
+  // Busy stations: fetch full stopping patterns for a sample per destination, reuse for the rest.
+  const LIMIT = 160;
+  let toFetch = deps, sampled = false;
+  if (deps.length > LIMIT) {
+    sampled = true;
+    const groups = new Map();
+    for (const d of deps) { const k = d.agencyName + '|' + d.headsign; (groups.get(k) || groups.set(k, []).get(k)).push(d); }
+    const per = Math.max(2, Math.floor(LIMIT / groups.size));
+    toFetch = [];
+    for (const g of groups.values()) {
+      const step = Math.max(1, g.length / per);
+      for (let i = 0; i < g.length && toFetch.length < LIMIT * 1.5; i += step) toFetch.push(g[Math.floor(i)]);
+    }
+  }
+  let done = 0;
+  const patterns = new Map(); // tripId -> downstream [{stop, offsetMin}]
+  await pool(toFetch, 6, async (d) => {
+    const trip = await api('/trip', { tripId: d.tripId });
+    if (run !== directRun) return;
+    const stops = tripStops(trip);
+    let i = stops.findIndex((s) => s.stopId === d.place.stopId);
+    if (i < 0) i = stops.findIndex((s) => (s.parentId && s.parentId === d.place.parentId) || s.name === d.place.name);
+    if (i < 0) return;
+    const t0 = Date.parse(d.place.departure);
+    const down = stops.slice(i + 1).filter((s) => s.dropoffType !== 'NOT_ALLOWED' && !s.cancelled)
+      .map((s) => ({ s, off: (Date.parse(s.arrival || s.scheduledArrival || s.departure) - t0) / 60000 }));
+    patterns.set(d.tripId, { home: stops[i], down });
+    status.textContent = `Reading stopping patterns… ${++done} of ${toFetch.length}`;
+  });
+  if (run !== directRun) return;
+
+  // Assign a pattern to every departure (the trip itself, or the nearest-in-time sampled trip with the same headsign).
+  const byGroup = new Map();
+  for (const d of toFetch) if (patterns.has(d.tripId)) { const k = d.agencyName + '|' + d.headsign; (byGroup.get(k) || byGroup.set(k, []).get(k)).push(d); }
+  const dests = new Map(); const segs = new Map(); const hours = new Array(28).fill(0); const ops = new Map();
+  let homeLL = null, counted = 0;
+  for (const d of deps) {
+    let p = patterns.get(d.tripId);
+    if (!p && sampled) {
+      const g = byGroup.get(d.agencyName + '|' + d.headsign) || [];
+      const t = Date.parse(d.place.departure);
+      const near = g.reduce((a, b) => (!a || Math.abs(Date.parse(b.place.departure) - t) < Math.abs(Date.parse(a.place.departure) - t) ? b : a), null);
+      if (near) p = patterns.get(near.tripId);
+    }
+    if (!p) continue;
+    counted++;
+    homeLL = homeLL || [d.place.lat, d.place.lon];
+    const depMin = minOfDay(d.place.departure);
+    hours[Math.floor(depMin / 60)]++;
+    ops.set(d.agencyName, (ops.get(d.agencyName) || 0) + 1);
+    let prev = { name: state.home.name, lat: d.place.lat, lon: d.place.lon };
+    for (const { s, off } of p.down) {
+      const key = s.parentId || s.name;
+      let e = dests.get(key);
+      if (!e) dests.set(key, e = { key, name: s.name, lat: s.lat, lon: s.lon, deps: [], fastest: Infinity, ops: new Set() });
+      if (!e.deps.includes(depMin)) e.deps.push(depMin);
+      e.fastest = Math.min(e.fastest, off); e.ops.add(d.agencyName);
+      const sk = [prev.name, s.name].sort().join('|');
+      const sg = segs.get(sk) || segs.set(sk, { a: [prev.lat, prev.lon], b: [s.lat, s.lon], n: 0 }).get(sk);
+      sg.n++; prev = s;
+    }
+  }
+  allDests = [...dests.values()].sort((a, b) => b.deps.length - a.deps.length || a.fastest - b.fastest);
+
+  // stats
+  const depMins = deps.map((d) => minOfDay(d.place.departure)).sort((a, b) => a - b);
+  const dayDeps = depMins.filter((m) => m >= 7 * 60 && m < 19 * 60);
+  let maxGap = 0;
+  for (let i = 1; i < dayDeps.length; i++) maxGap = Math.max(maxGap, dayDeps[i] - dayDeps[i - 1]);
+  $('direct-stats').innerHTML = [
+    [deps.length, 'trains a day'],
+    [(dayDeps.length / 12).toFixed(1), 'an hour, 07:00–19:00'],
+    [`${clock(depMins[0])}–${clock(depMins[depMins.length - 1])}`, 'first and last train'],
+    [maxGap ? dur(maxGap) : '–', 'longest daytime wait'],
+    [allDests.length, 'stations without changing'],
+  ].map(([b, s]) => `<div class="stat"><b>${b}</b><span>${s}</span></div>`).join('');
+
+  status.textContent = `${[...ops.keys()].join(', ')} · ${state.dayType === 'weekday' ? 'weekday' : state.dayType === 'sat' ? 'Saturday' : 'Sunday'} timetable for ${new Date(state.date + 'T12:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}`
+    + (sampled ? ` · busy station, so stopping patterns are sampled from ${toFetch.length} of ${deps.length} trains` : '');
+
+  drawHours(hours);
+  renderDestTable();
+  drawMap(homeLL, segs);
+}
+
+function renderDestTable() {
+  const max = allDests[0]?.deps.length || 1;
+  const rows = showAll ? allDests : allDests.slice(0, 15);
+  $('dest-rows').innerHTML = rows.map((e) => `<tr data-k="${esc(e.key)}">
+    <td>${esc(e.name)}</td>
+    <td class="num"><span class="bar" style="width:${Math.max(3, 46 * e.deps.length / max)}px"></span>${e.deps.length}</td>
+    <td>${freqLabel(e.deps, e.deps.length)}</td>
+    <td class="num">${dur(e.fastest)}</td></tr>`).join('');
+  $('more').hidden = allDests.length <= 15;
+  $('more').textContent = showAll ? 'Show fewer' : `Show all ${allDests.length} stations`;
+}
+
+function drawMap(homeLL, segs) {
+  mapLayer.clearLayers();
+  if (!homeLL) return;
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  for (const s of segs.values()) {
+    L.polyline([s.a, s.b], { color: accent, weight: 1.5 + 1.8 * Math.log2(1 + s.n), opacity: 0.55, lineCap: 'round' }).addTo(mapLayer);
+  }
+  const bounds = L.latLngBounds([homeLL]);
+  for (const e of allDests) {
+    const m = L.circleMarker([e.lat, e.lon], { radius: 3 + Math.sqrt(e.deps.length) * 1.3, color: accent, weight: 1.5, fillColor: accent, fillOpacity: 0.25 })
+      .bindTooltip(`<b>${esc(e.name)}</b><br>${e.deps.length} trains · ${freqLabel(e.deps, e.deps.length)}<br>fastest ${dur(e.fastest)}`)
+      .on('click', () => setDest({ place: e.key, name: e.name }))
+      .addTo(mapLayer);
+    bounds.extend(m.getLatLng());
+  }
+  L.circleMarker(homeLL, { radius: 8, color: '#fff', weight: 2.5, fillColor: '#d64e6c', fillOpacity: 1 })
+    .bindTooltip(`<b>${esc(state.home.name)}</b>`, { permanent: false }).addTo(mapLayer);
+  map.fitBounds(bounds.pad(0.08), { maxZoom: 11 });
+}
+
+function drawHours(hours) {
+  const first = Math.max(4, hours.findIndex((n) => n > 0)), last = Math.min(27, 27 - [...hours].reverse().findIndex((n) => n > 0));
+  const span = Math.max(1, last - first + 1), max = Math.max(...hours, 1), W = 600, H = 90, bw = W / span;
+  let s = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Departures per hour">`;
+  for (let h = first; h <= last; h++) {
+    const x = (h - first) * bw, bh = (hours[h] / max) * (H - 30);
+    s += `<rect x="${x + 2}" y="${H - 16 - bh}" width="${bw - 4}" height="${bh}" rx="2" fill="var(--accent)" opacity=".75"><title>${String(h % 24).padStart(2, '0')}:00 – ${hours[h]} trains</title></rect>`;
+    if (hours[h]) s += `<text x="${x + bw / 2}" y="${H - 20 - bh}" text-anchor="middle">${hours[h]}</text>`;
+    if ((h - first) % 2 === 0) s += `<text x="${x + bw / 2}" y="${H - 3}" text-anchor="middle">${String(h % 24).padStart(2, '0')}</text>`;
+  }
+  $('hours').innerHTML = `<h3 style="margin-top:14px">Departures each hour</h3>` + s + '</svg>';
+}
+
+// ---------- section 2: journeys ----------
+let tripRun = 0;
+async function fetchJourneys(from, to) {
+  const win = dayWindow();
+  const q = { fromPlace: from, toPlace: to, time: new Date(win.start).toISOString(), searchWindow: 86400 - 4 * 3600, maxItineraries: 200 };
+  q.transitModes = apiModes().join(',');
+  q.pedestrianSpeed = WALK_SPEEDS.find((w) => w.key === state.walk).ms;
+  if (state.change) q.minTransferTime = state.change;
+  const r = await api('/plan', q);
+  let its = (r.itineraries || []).filter((it) => it.legs.some((l) => l.mode !== 'WALK'));
+  const seen = new Set();
+  its = its.filter((it) => { const k = it.startTime + it.endTime + it.legs.map((l) => l.tripId || l.mode).join(); return !seen.has(k) && seen.add(k); });
+  its.forEach((it) => { it.dep = minOfDay(it.startTime); it.arr = minOfDay(it.endTime); it.mins = it.arr - it.dep; });
+  its = its.filter((it) => it.dep < 27 * 60);
+  // Drop journeys beaten by another that leaves no earlier and arrives no later.
+  its = its.filter((a) => !its.some((b) => b !== a && b.dep >= a.dep && b.arr <= a.arr && (b.dep > a.dep || b.arr < a.arr)));
+  if (!its.length) return { its: [], overnight: 0 };
+  // Drop "wait overnight" options: anything far slower than the quickest.
+  const fastest = Math.min(...its.map((i) => i.mins));
+  const limit = fastest + Math.max(90, fastest * 0.75);
+  const sameDay = its.filter((i) => i.mins <= limit).sort((a, b) => a.dep - b.dep);
+  return { its: sameDay, overnight: its.length - sameDay.length };
+}
+
+function changeStations(it) {
+  const t = it.legs.filter((l) => l.mode !== 'WALK');
+  return t.slice(0, -1).map((l) => l.to.name);
+}
+function summarise(its) {
+  const mins = its.map((i) => i.mins).sort((a, b) => a - b);
+  // A true median: with an even count, halfway between the two middle journeys (not the slower of them).
+  const mid = Math.floor(mins.length / 2);
+  const median = mins.length % 2 ? mins[mid] : (mins[mid - 1] + mins[mid]) / 2;
+  const day = its.filter((i) => i.dep >= 7 * 60 && i.dep < 19 * 60).map((i) => i.dep);
+  let gap = 0; for (let k = 1; k < day.length; k++) gap = Math.max(gap, day[k] - day[k - 1]);
+  const via = new Map();
+  for (const it of its) for (const c of new Set(changeStations(it))) via.set(c, (via.get(c) || 0) + 1);
+  const topVia = [...via.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const changes = its.map((i) => i.legs.filter((l) => l.mode !== 'WALK').length - 1).sort((a, b) => a - b);
+  return { fastest: mins[0], median, gap, topVia, changes: changes[Math.floor(changes.length / 2)], perHour: day.length / 12 };
+}
+
+function timeline(its, label) {
+  const W = 900, L0 = 48, R0 = 120, RH = 17, top = 22;
+  const lo = Math.floor(Math.min(...its.map((i) => i.dep)) / 60) * 60, hi = Math.ceil(Math.max(...its.map((i) => i.arr)) / 60) * 60;
+  const x = (m) => L0 + ((m - lo) / (hi - lo)) * (W - L0 - R0);
+  const H = top + its.length * RH + 6;
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)} journeys across the day">`;
+  for (let h = lo; h <= hi; h += 60) {
+    s += `<line x1="${x(h)}" x2="${x(h)}" y1="${top - 6}" y2="${H}" stroke="var(--line)"/>`;
+    if (((h - lo) / 60) % (hi - lo > 14 * 60 ? 2 : 1) === 0) s += `<text x="${x(h)}" y="12" text-anchor="middle">${clock(h)}</text>`;
+  }
+  its.forEach((it, i) => {
+    const y = top + i * RH;
+    s += `<g class="row" data-i="${i}"><rect class="bg" x="0" y="${y}" width="${W}" height="${RH}" fill="transparent"/>`;
+    s += `<text x="${L0 - 8}" y="${y + 12}" text-anchor="end">${clock(it.dep)}</text>`;
+    s += `<line x1="${x(it.dep)}" x2="${x(it.arr)}" y1="${y + RH / 2}" y2="${y + RH / 2}" stroke="var(--walk)" stroke-width="1.5" stroke-dasharray="2 3"/>`;
+    for (const l of it.legs) {
+      if (l.mode === 'WALK') continue;
+      const a = x(minOfDay(l.startTime)), b = x(minOfDay(l.endTime));
+      s += `<rect x="${a}" y="${y + 3}" width="${Math.max(2, b - a)}" height="${RH - 6}" rx="3" fill="${colourFor(l.agencyName || l.mode)}"/>`;
+    }
+    s += `<text x="${x(it.arr) + 6}" y="${y + 12}">${clock(it.arr)} · ${dur(it.mins)}</text></g>`;
+  });
+  return s + '</svg>';
+}
+
+// Tile icons: a dog-legged route between two stops; evenly spaced departures on a line; a gap between two marks.
+const ICON_ROUTE = '<svg width="14" height="13" viewBox="0 0 14 13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 10.5h3l3-8h3"/><circle cx="2.2" cy="10.5" r="1.7" fill="currentColor" stroke="none"/><circle cx="11.8" cy="2.5" r="1.7" fill="currentColor" stroke="none"/></svg>';
+const ICON_FREQ = '<svg width="14" height="13" viewBox="0 0 14 13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M1 10.5h12M2.5 4v6.5M5.5 4v6.5M8.5 4v6.5M11.5 4v6.5"/></svg>';
+const ICON_GAP = '<svg width="14" height="13" viewBox="0 0 14 13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 2v9M12.5 2v9M4 6.5h6M5.8 4.7 4 6.5l1.8 1.8M8.2 4.7 10 6.5 8.2 8.3"/></svg>';
+const ICON_CHANGE ='<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h9M8.5 2l2.5 2.5L8.5 7M12 9.5H3M5.5 7 3 9.5 5.5 12"/></svg>';
+const ICON_WALK = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" fill="currentColor"><circle cx="7.6" cy="1.9" r="1.5"/><path d="M6.4 4.2 4.3 5.6 3.6 8l1.2.3.5-1.8.9-.6-.8 3.7L3.4 13l1 .7 2.2-3.2.7-1.2 1.5 1.7v2.9h1.2V10.2L8.4 8.3l.4-1.9.6 1.1 1.9 1 .5-1.1-1.6-.8-1-2a1.6 1.6 0 0 0-2.8-.4z"/></svg>';
+
+function tipHtml(it, destName) {
+  let h = '', prevEnd = null;
+  const legs = it.legs;
+  const gap = (icon, text, cls = '') => `<div class="gap ${cls}">${icon}<span>${text}</span></div>`;
+  legs.forEach((l, k) => {
+    if (l.mode === 'WALK') {
+      const m = Math.round((Date.parse(l.endTime) - Date.parse(l.startTime)) / 60000);
+      if (m <= 0) return;
+      if (k === legs.length - 1) h += gap(ICON_WALK, `${m} min walk to ${esc(destName)}`);
+      else if (k === 0) h += gap(ICON_WALK, `${m} min walk to ${esc(l.to.name)}`);
+      return;
+    }
+    if (prevEnd) {
+      const w = (Date.parse(l.startTime) - prevEnd) / 60000;
+      h += gap(ICON_CHANGE, `${dur(w)} to connect`, w < 5 ? 'tight' : '');
+    }
+    const op = l.agencyName || l.mode;
+    const towards = l.headsign && l.headsign !== l.to.name ? `towards ${esc(l.headsign)}` : '';
+    h += `<div class="leg" style="--c:${colourFor(op)}">
+      <span class="t">${fmt(l.startTime)}</span><span class="rail"><i></i><i></i></span><span class="st">${esc(l.from.name)}</span>
+      <span class="op"><b>${esc(op)}</b>${towards}</span>
+      <span class="t">${fmt(l.endTime)}</span><span class="st">${esc(l.to.name)}</span></div>`;
+    prevEnd = Date.parse(l.endTime);
+  });
+  return `<div class="legs">${h}</div>`;
+}
+
+function directionBlock(title, res, kind) {
+  if (!res.its.length) return `<h3>${esc(title)}</h3><p class="status err">No journeys found on this day.</p>`;
+  const its = res.its, s = summarise(its);
+  const first = its[0], last = its[its.length - 1];
+  // The last train of the day, in both directions.
+  const key = [clock(last.dep), 'Last', kind === 'out' ? `arrives <strong>${clock(last.arr)}</strong>` : `home by <strong>${clock(last.arr)}</strong>`];
+  const clockIcon = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M6 3.2V6l2 1.3" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>';
+  const via = s.topVia.length ? 'Usually change at ' + s.topVia.map(([n, c]) => `<b>${esc(n)}</b> (${Math.round(100 * c / its.length)}%)`).join(', ') : 'Direct, no changes';
+  return `<h3>${esc(title)}</h3>
+    <div class="stats trip-stats">
+      <div class="stat"><div class="fast"><b>${its.length}</b><span class="tag">${ICON_ROUTE}Journeys</span></div><span>a day</span></div>
+      <div class="stat"><div class="fast"><b>${dur(s.fastest)}</b><span class="tag"><svg width="11" height="13" viewBox="0 0 11 13" aria-hidden="true"><path d="M6.5 0 0 7.5h4.2L3.5 13 11 4.8H6.6L7.5 0z" fill="currentColor"/></svg>Fastest</span></div><span title="Half of the journeys take this long or less">Typically <strong>${dur(s.median)}</strong></span></div>
+      <div class="stat"><div class="fast"><b>${s.perHour >= 0.8 ? Math.round(s.perHour) + ' an hour' : s.perHour ? 'every ' + Math.round(1 / s.perHour) + ' hours' : 'none'}</b><span class="tag">${ICON_FREQ}Frequency</span></div><span>daytime, <span style="white-space:nowrap">07:00–19:00</span></span></div>
+      <div class="stat"><div class="fast"><b>${clock(first.dep)}</b><span class="tag">${clockIcon}First</span></div><span>arrives <strong>${clock(first.arr)}</strong></span></div>
+      <div class="stat"><div class="fast"><b>${s.gap ? dur(s.gap) : '–'}</b><span class="tag">${ICON_GAP}Longest gap</span></div><span>daytime, <span style="white-space:nowrap">07:00–19:00</span></span></div>
+      <div class="stat"><div class="fast"><b>${key[0]}</b><span class="tag">${clockIcon}${key[1]}</span></div><span>${key[2]}</span></div>
+    </div>
+    <p class="note" style="margin:0 0 6px">${via}.${s.topVia.length ? ` Median ${s.changes} change${s.changes === 1 ? '' : 's'}.` : ''}</p>
+    <div class="timeline" data-kind="${kind}">${timeline(its, title)}</div>`;
+}
+
+let lastResults = {};
+async function loadTrip() {
+  const run = ++tripRun;
+  const out = $('trip-out'), status = $('trip-status');
+  $('tip').style.display = 'none';
+  status.className = 'status';
+  if (!state.home) { out.innerHTML = ''; status.textContent = 'Choose a home station first, then a destination to see every journey across the day.'; return; }
+  if (!state.dest) { out.innerHTML = ''; status.textContent = 'Pick a destination to see every journey across the day.'; return; }
+  if (!state.modes.size) { out.innerHTML = ''; status.className = 'status err'; status.textContent = 'Choose at least one mode of transport in Journey settings, at the bottom of the page.'; return; }
+  status.className = 'status'; status.textContent = `Finding every journey between ${state.home.name} and ${state.dest.name}…`;
+  out.innerHTML = '';
+  try {
+    const [there, back] = await Promise.all([fetchJourneys(state.home.id, state.dest.place), fetchJourneys(state.dest.place, state.home.id)]);
+    if (run !== tripRun) return;
+    lastResults = { out: there.its, back: back.its };
+    status.textContent = '';
+    out.innerHTML = directionBlock(`${state.home.name} → ${state.dest.name}`, there, 'out')
+      + '<div style="height:22px"></div>'
+      + directionBlock(`${state.dest.name} → ${state.home.name}`, back, 'back')
+      + `<div class="legend">${[...opColour].map(([op, c]) => `<span><i style="background:${c}"></i>${esc(op)}</span>`).join('')}<span><i style="background:none;border-top:2px dotted var(--walk);border-radius:0;height:0;vertical-align:3px"></i>walking or waiting</span></div>`;
+  } catch (e) {
+    if (run !== tripRun) return;
+    status.className = 'status err'; status.textContent = 'Could not plan journeys: ' + e.message;
+  }
+}
+
+// tooltip on timeline rows
+const tip = $('tip');
+document.addEventListener('mousemove', (e) => {
+  const row = e.target.closest?.('.timeline .row');
+  if (!row) { tip.style.display = 'none'; return; }
+  const kind = row.closest('.timeline').dataset.kind;
+  const it = lastResults[kind][+row.dataset.i];
+  if (!it) return;
+  tip.innerHTML = tipHtml(it, kind === 'out' ? state.dest.name : state.home.name); tip.style.display = 'block';
+  const r = tip.getBoundingClientRect();
+  tip.style.left = Math.min(e.clientX + 14, innerWidth - r.width - 8) + 'px';
+  tip.style.top = (e.clientY + 14 + r.height > innerHeight ? e.clientY - r.height - 10 : e.clientY + 14) + 'px';
+});
+
+// ---------- wiring ----------
+function setDest(d) {
+  state.dest = d; $('dest').value = d.name; syncUrl(); loadTrip();
+  $('trip').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function refreshAll() { syncUrl(); loadDirect(); loadTrip(); }
+
+attachSearch($('home'), $('home-s'), { stopsOnly: true, onPick: (r) => { state.home = { id: r.id, name: r.name }; refreshAll(); } });
+attachSearch($('dest'), $('dest-s'), { stopsOnly: false, onPick: (r) => setDest({ place: r.type === 'STOP' ? r.id : `${r.lat},${r.lon}`, name: r.name }) });
+$('daytype').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  state.dayType = b.dataset.d; state.date = nextDate(state.dayType); $('date').value = state.date;
+  document.querySelectorAll('#daytype button').forEach((x) => x.classList.toggle('on', x === b));
+  refreshAll();
+});
+$('date').addEventListener('change', () => {
+  if (!$('date').value) return;
+  state.date = $('date').value;
+  const wd = new Date(state.date + 'T12:00').getDay();
+  state.dayType = wd === 6 ? 'sat' : wd === 0 ? 'sun' : 'weekday';
+  document.querySelectorAll('#daytype button').forEach((x) => x.classList.toggle('on', x.dataset.d === state.dayType));
+  refreshAll();
+});
+$('modes').addEventListener('change', (e) => {
+  const k = e.target.value; if (!k) return;
+  e.target.checked ? state.modes.add(k) : state.modes.delete(k);
+  refreshAll(); // modes change the direct services as well as the journeys
+});
+$('walk').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  state.walk = b.dataset.k; renderSettings(); syncUrl(); loadTrip();
+});
+$('change').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  state.change = +b.dataset.k; renderSettings(); syncUrl(); loadTrip();
+});
+$('more').addEventListener('click', () => { showAll = !showAll; renderDestTable(); });
+$('dest-rows').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr'); if (!tr) return;
+  const d = allDests.find((x) => x.key === tr.dataset.k); if (d) setDest({ place: d.key, name: d.name });
+});
+
+state.date = state.date || nextDate(state.dayType);
+$('home').value = state.home ? state.home.name : '';
+if (state.dest) $('dest').value = state.dest.name;
+$('date').value = state.date;
+renderSettings();
+document.querySelectorAll('#daytype button').forEach((x) => x.classList.toggle('on', x.dataset.d === state.dayType));
+initMap();
+refreshAll();
+</script>
+</body>
+</html>

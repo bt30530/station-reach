@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "station-reach",
+  "compatibility_date": "2026-09-11",
+  // A static site: everything is in public/ and the browser talks to Transitous directly.
+  "assets": { "directory": "public" },
+  "routes": [
+    { "pattern": "commute.tobermory.io", "custom_domain": true }
+  ]
+}
