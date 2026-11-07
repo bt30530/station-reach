@@ -430,9 +430,12 @@ function setTiles() {
 let directRun = 0, allDests = [], showAll = false;
 
 async function fetchDepartures(stopId, win) {
+  // Ask the API for the chosen modes only: big interchanges also carry hundreds of buses a day,
+  // which would otherwise use up the pages and cut the day short (last train shown mid-afternoon).
+  const mode = selectedGroups().flatMap((g) => [...g.api, ...(g.seen || [])]).join(',');
   const out = []; let cursor = null;
-  for (let page = 0; page < 12; page++) {
-    const q = { stopId, n: 200 };
+  for (let page = 0; page < 30; page++) { // ~2,000 rail calls a day at the busiest stations, 200 a page
+    const q = { stopId, n: 200, mode };
     if (cursor) q.pageCursor = cursor; else q.time = new Date(win.start).toISOString();
     const r = await api('/stoptimes', q);
     const st = r.stopTimes || [];
