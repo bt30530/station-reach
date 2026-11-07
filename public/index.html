@@ -176,7 +176,7 @@ td.num { white-space: nowrap; }
           <tbody id="dest-rows"></tbody>
         </table>
         <button class="linkbtn" id="more" hidden>Show all</button>
-        <p class="note">Tap a station to plan journeys to it. Line thickness on the map shows how many trains run each stretch.</p>
+        <p class="note">Tap a station to show its route on the map and plan journeys to it below. Line thickness on the map shows how many trains run each stretch.</p>
       </div>
     </div>
   </section>
@@ -618,7 +618,7 @@ function drawMap(homeLL, segs) {
   for (const e of allDests) {
     const m = L.circleMarker([e.lat, e.lon], { radius: 3 + Math.sqrt(e.deps.length) * 1.3, color: accent, weight: 1.5, fillColor: accent, fillOpacity: 0.25 })
       .bindTooltip(`<b>${esc(e.name)}</b><br>${e.deps.length} trains · ${freqLabel(e.deps, e.deps.length)}<br>fastest ${dur(e.fastest)}`)
-      .on('click', () => setDest({ place: e.key, name: e.name }))
+      .on('click', () => setDest({ place: e.key, name: e.name }, { scroll: false }))
       .addTo(mapLayer);
     bounds.extend(m.getLatLng());
   }
@@ -850,9 +850,11 @@ document.addEventListener('mousemove', (e) => {
 });
 
 // ---------- wiring ----------
-function setDest(d) {
+// Picking from the table or the map keeps the page where it is (the map shows the route);
+// picking in the destination box is already down in that section.
+function setDest(d, { scroll = true } = {}) {
   state.dest = d; $('dest').value = d.name; syncUrl(); loadTrip();
-  $('trip').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (scroll) $('trip').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function refreshAll() { syncUrl(); loadDirect(); loadTrip(); }
 
@@ -888,7 +890,7 @@ $('change').addEventListener('click', (e) => {
 $('more').addEventListener('click', () => { showAll = !showAll; renderDestTable(); });
 $('dest-rows').addEventListener('click', (e) => {
   const tr = e.target.closest('tr'); if (!tr) return;
-  const d = allDests.find((x) => x.key === tr.dataset.k); if (d) setDest({ place: d.key, name: d.name });
+  const d = allDests.find((x) => x.key === tr.dataset.k); if (d) setDest({ place: d.key, name: d.name }, { scroll: false });
 });
 
 state.date = state.date || nextDate(state.dayType);
