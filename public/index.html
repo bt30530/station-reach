@@ -858,7 +858,11 @@ function setDest(d, { scroll = true } = {}) {
 }
 function refreshAll() { syncUrl(); loadDirect(); loadTrip(); }
 
-attachSearch($('home'), $('home-s'), { stopsOnly: true, current: () => state.home?.name, onPick: (r) => { state.home = { id: r.id, name: r.name }; refreshAll(); } });
+attachSearch($('home'), $('home-s'), { stopsOnly: true, current: () => state.home?.name, onPick: (r) => {
+  // A new home station starts afresh: the old destination (and its red route) no longer applies.
+  if (r.id !== state.home?.id) { state.dest = null; $('dest').value = ''; }
+  state.home = { id: r.id, name: r.name }; refreshAll();
+} });
 attachSearch($('dest'), $('dest-s'), { stopsOnly: false, current: () => state.dest?.name, onPick: (r) => setDest({ place: r.type === 'STOP' ? r.id : `${r.lat},${r.lon}`, name: r.name }) });
 $('daytype').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
